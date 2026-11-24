@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Snap Snack — SeLFeQuiTy™ AI</title>
+<meta name="description" content="Snap a pic. We sort the rest. AI food tracking, free for every member, courtesy of SeLFeQuiTy™ AI.">
+<meta name="theme-color" content="#1a1650">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" type="image/png" href="/favicon.png">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Snap Snack">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta property="og:title" content="Snap Snack — SeLFeQuiTy™ AI">
+<meta property="og:description" content="Snap a pic. We sort the rest. Free AI food tracker for every member. Your log stays private.">
+<meta property="og:image" content="https://snap.selfequity.org/share-card.jpg">
+<meta property="og:url" content="https://snap.selfequity.org/">
+<meta name="twitter:card" content="summary_large_image">
+<script>
+  // Opened from the home-screen icon? Go straight into the app.
+  (function(){
+    var app="https://claude.ai/artifact/QYsn9H9JtPMVYBz6EfCSJ1";
+    var standalone = (window.matchMedia && matchMedia("(display-mode: standalone)").matches) || navigator.standalone === true;
+    if (standalone || /[?&]launch=1/.test(location.search)) location.replace(app);
+  })();
+</script>
+<style>
+:root{color-scheme:dark}
+html{background:#0b0c22 radial-gradient(circle at 20% 0,#3a2a8c,#14123f 600px,#0b0c22 1100px) no-repeat}
+*{box-sizing:border-box}
+body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;color:#eef0ff;
+  background:transparent;min-height:100vh;
+  padding:env(safe-area-inset-top) 18px calc(40px + env(safe-area-inset-bottom))}
+main{max-width:560px;margin:0 auto;padding-top:28px;text-align:center}
+.hero{filter:drop-shadow(0 20px 36px rgba(0,0,0,.5));border-radius:40px}
+@keyframes scan{0%{transform:translateY(-120px);opacity:0}15%,85%{opacity:1}100%{transform:translateY(120px);opacity:0}}
+.scan{animation:scan 2.6s ease-in-out infinite}
+@media (prefers-reduced-motion:reduce){.scan{animation:none}}
+h1{font-size:40px;margin:18px 0 4px;letter-spacing:-.02em}
+.tag{color:#ff8a5c;font-weight:600;margin:0 0 18px;font-size:18px}
+.btn{display:block;width:100%;padding:18px;border-radius:18px;font-size:19px;font-weight:700;text-decoration:none;border:0;cursor:pointer}
+.primary{background:linear-gradient(135deg,#ff7a45,#e8401c);color:#fff;box-shadow:0 10px 28px rgba(232,64,28,.45)}
+.card{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);border-radius:22px;padding:20px;margin-top:18px;text-align:left}
+.card h2{margin:0 0 10px;font-size:19px}
+ol{margin:0;padding-left:22px;line-height:1.6;color:#d5d9f5} ol b{color:#fff}
+ul{margin:0;padding-left:20px;line-height:1.6;color:#d5d9f5}
+.share{display:inline-block;vertical-align:-4px;width:20px;height:20px}
+.seal{width:100%;max-width:360px;display:block;margin:0 auto;border-radius:18px;background:#fefbf2;padding:8px}
+.court{margin-top:22px;color:#9fa6d6;font-size:14px} .court b{display:block;color:#fff;font-size:22px;margin-top:2px}
+.small{color:#9fa6d6;font-size:13px;margin-top:10px}
+</style>
+</head>
+<body>
+<main>
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="180" height="180" class="hero">
+<defs>
+ <radialGradient id="bg_i" cx="30%" cy="20%" r="95%">
+  <stop offset="0" stop-color="#3a2a8c"/><stop offset=".45" stop-color="#1a1650"/><stop offset="1" stop-color="#0a0b24"/>
+ </radialGradient>
+ <radialGradient id="glow_i" cx="50%" cy="58%" r="45%">
+  <stop offset="0" stop-color="#ff6a3d" stop-opacity=".55"/><stop offset="1" stop-color="#ff6a3d" stop-opacity="0"/>
+ </radialGradient>
+ <radialGradient id="fruit_i" cx="38%" cy="32%" r="75%">
+  <stop offset="0" stop-color="#ffd27a"/><stop offset=".35" stop-color="#ff8a3d"/><stop offset=".8" stop-color="#f0432a"/><stop offset="1" stop-color="#b8241c"/>
+ </radialGradient>
+ <linearGradient id="leaf_i" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#7cf5c4"/><stop offset="1" stop-color="#14b886"/></linearGradient>
+ <linearGradient id="bracket_i" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#7ef0ff"/><stop offset="1" stop-color="#a78bff"/></linearGradient>
+ <linearGradient id="scan_i" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#7ef0ff" stop-opacity="0"/><stop offset=".5" stop-color="#7ef0ff" stop-opacity=".95"/><stop offset="1" stop-color="#7ef0ff" stop-opacity="0"/></linearGradient>
+ <linearGradient id="sheen_i" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".18"/><stop offset=".5" stop-color="#fff" stop-opacity="0"/></linearGradient>
+ <filter id="blur_i" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="6"/></filter>
+ <clipPath id="clip_i"><rect width="512" height="512" rx="115"/></clipPath>
+</defs>
+<g clip-path="url(#clip_i)">
+ <rect width="512" height="512" fill="url(#bg_i)"/>
+ <g opacity=".14" stroke="#9fb4ff" stroke-width="1">
+  <path d="M0 128H512M0 192H512M0 256H512M0 320H512M0 384H512M128 0V512M192 0V512M256 0V512M320 0V512M384 0V512"/>
+ </g>
+ <circle cx="256" cy="280" r="200" fill="url(#glow_i)"/>
+ <!-- fruit -->
+ <ellipse cx="256" cy="388" rx="92" ry="14" fill="#000" opacity=".35" filter="url(#blur_i)"/>
+ <path d="M256 168c-30-14-78-12-104 22-30 40-22 106 14 146 26 29 58 44 90 30 32 14 64-1 90-30 36-40 44-106 14-146-26-34-74-36-104-22z" fill="url(#fruit_i)"/>
+ <path d="M190 206c-18 20-24 48-18 72" stroke="#fff" stroke-opacity=".55" stroke-width="12" stroke-linecap="round" fill="none"/>
+ <path d="M256 170c2-20 8-36 18-48" stroke="#5a3a1c" stroke-width="9" stroke-linecap="round" fill="none"/>
+ <path d="M270 140c22-26 58-34 86-24-12 30-46 48-86 24z" fill="url(#leaf_i)"/>
+ <path d="M276 136c22-8 44-14 66-16" stroke="#0d7f5c" stroke-width="3" fill="none" stroke-linecap="round"/>
+ <!-- AI scan brackets -->
+ <g stroke="url(#bracket_i)" stroke-width="16" stroke-linecap="round" fill="none">
+  <path d="M104 160V120a16 16 0 0 1 16-16h40"/><path d="M352 104h40a16 16 0 0 1 16 16v40"/>
+  <path d="M408 352v40a16 16 0 0 1-16 16h-40"/><path d="M160 408h-40a16 16 0 0 1-16-16v-40"/>
+ </g>
+ <!-- scan line -->
+ <g class="scan"><rect x="96" y="262" width="320" height="5" rx="2.5" fill="url(#scan_i)"/>
+ <rect x="96" y="252" width="320" height="25" fill="url(#scan_i)" opacity=".18"/></g>
+ <!-- AI sparkle -->
+ <path d="M396 66c4 22 12 30 34 34-22 4-30 12-34 34-4-22-12-30-34-34 22-4 30-12 34-34z" fill="#fff"/>
+ <path d="M440 132c2 10 6 14 16 16-10 2-14 6-16 16-2-10-6-14-16-16 10-2 14-6 16-16z" fill="#7ef0ff"/>
+ <rect width="512" height="256" fill="url(#sheen_i)"/>
+</g>
+
+</svg>
+
+  <h1>Snap Snack</h1>
+  <p class="tag">Snap a pic. We sort the rest.</p>
+  <a class="btn primary" href="https://claude.ai/artifact/QYsn9H9JtPMVYBz6EfCSJ1">Open Snap Snack</a>
+  <p class="small">Free for every member. Sign in to Claude for AI photo reading. Your log stays private to you.</p>
+
+  <div class="card" id="install">
+    <h2>Put Snap Snack on your home screen</h2>
+    <ol id="steps-ios">
+      <li>Open this page in <b>Safari</b>.</li>
+      <li>Tap the <b>Share</b> button <svg class="share" viewBox="0 0 24 24" fill="none" stroke="#7ef0ff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12M7 8l5-5 5 5M5 12v8h14v-8"/></svg> at the bottom of the screen.</li>
+      <li>Scroll down and tap <b>Add to Home Screen</b>.</li>
+      <li>Tap <b>Add</b> in the top-right corner.</li>
+      <li>Tap the new <b>Snap Snack</b> icon to start.</li>
+    </ol>
+    <ol id="steps-android" hidden>
+      <li>Open this page in <b>Chrome</b>.</li>
+      <li>Tap the <b>⋮</b> menu in the top-right corner.</li>
+      <li>Tap <b>Add to Home screen</b> (or <b>Install app</b>).</li>
+      <li>Tap <b>Install</b> or <b>Add</b>.</li>
+      <li>Tap the new <b>Snap Snack</b> icon to start.</li>
+    </ol>
+    <button class="btn primary" id="installbtn" hidden style="margin-top:14px">Install Snap Snack</button>
+  </div>
+
+  <div class="card">
+    <h2>What it does</h2>
+    <ul>
+      <li>Photo your meal: calories, protein, carbs &amp; fat in seconds</li>
+      <li>Water, weight &amp; progress by day, week and month</li>
+      <li>Updates arrive automatically, like any app</li>
+    </ul>
+  </div>
+
+  <div class="card"><img class="seal" src="/seal.png" alt="Family First Fruits Family Foundation seal with BL, Associate Member of SeLFeQuiTy USA inTL"></div>
+
+  <div class="court">Courtesy of<b>SeLFeQuiTy™ AI</b></div>
+</main>
+<script>
+  if (/android/i.test(navigator.userAgent)) {
+    document.getElementById("steps-ios").hidden = true;
+    document.getElementById("steps-android").hidden = false;
+  }
+  var deferred;
+  window.addEventListener("beforeinstallprompt", function(e){ e.preventDefault(); deferred = e; document.getElementById("installbtn").hidden = false; });
+  document.getElementById("installbtn").addEventListener("click", function(){ if (deferred) { deferred.prompt(); deferred = null; } });
+  if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").catch(function(){});
+</script>
+</body>
+</html>

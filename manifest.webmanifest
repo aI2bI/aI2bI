@@ -1,0 +1,17 @@
+{
+  "name": "Snap Snack — SeLFeQuiTy™ AI",
+  "short_name": "Snap Snack",
+  "description": "Snap a pic. We sort the rest. AI food tracking, free for every member, courtesy of SeLFeQuiTy™ AI.",
+  "id": "/",
+  "start_url": "/?launch=1",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#0b0c22",
+  "theme_color": "#1a1650",
+  "icons": [
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-maskable-192.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" },
+    { "src": "/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
