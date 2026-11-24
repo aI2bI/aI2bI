@@ -287,6 +287,11 @@ th{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--mute
 .metric .v{font-family:var(--f-display);font-weight:800;font-size:22px}
 .metric .pill{font-size:10px;padding:2px 7px}
 @media (max-width:420px){.metrics{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@supports not (color: color-mix(in srgb, red 50%, blue)){
+  .dock{background:var(--bg)} .coach{background:var(--surface)} .chipbtn.danger{border-color:var(--bad)}
+  .pill.good,.pill.warn,.pill.bad,.gr.good,.gr.mid,.gr.warn,.gr.bad{background:var(--surface-2)}
+  .snap{box-shadow:none} .analyzing::after{background:none} .entry:hover{border-color:var(--accent)}
+}
 .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
 </style>
 
@@ -392,6 +397,7 @@ const DEFAULT_SETTINGS = {
 /* ---------- helpers ---------- */
 const $ = (s, r=document) => r.querySelector(s);
 const clone = o => JSON.parse(JSON.stringify(o));
+const last = a => a[a.length-1];
 const num = v => { const n = parseFloat(String(v ?? "").replace(/[^0-9.\-]/g,"")); return isFinite(n) ? n : 0; };
 const r0 = n => Math.round(n||0);
 const r1 = n => Math.round((n||0)*10)/10;
@@ -440,13 +446,63 @@ function slope(ys){ // least-squares slope per index step, ignoring nulls
    S.daily:   { "YYYY-MM-DD": { water:ml, weight:lb } }
    Local mode: localStorage. Claude viewer: private per-user db rows (data/users/<id>/…), synced live across devices. */
 const LS_KEY = "snapsnack.v1";
+const VIEWS = ["today","gallery","burn","progress","week","month","targets"];
 const S = { entries:[], daily:{}, settings:clone(DEFAULT_SETTINGS), view:"today", day:todayKey(), pending:[] };
+/* Every record from storage or sync passes through these, so one bad or old-format record can never blank the app. */
+const ACT_KEYS = ["rest","think","walk","active","w_light","w_mod","w_full","w_high"];
+const DAY_RE = /^\d{4}-\d{2}-\d{2}$/, TIME_RE = /^([01]?\d|2[0-3]):[0-5]\d$/;
+const inRange = (v, lo, hi, dflt) => { const n = num(v); return n >= lo && n <= hi ? n : dflt; };
+function cleanEntry(e){
+  if (!e || typeof e !== "object") return null;
+  const t = Number(e.ts), tsOk = isFinite(t) && t > 0;
+  const day = typeof e.day === "string" && DAY_RE.test(e.day) ? e.day : tsOk ? dayKey(t) : null;
+  if (!day) return null;
+  const items = Array.isArray(e.items) ? e.items.filter(i => i && typeof i === "object").map(normItem) : [];
+  const out = { id:String(e.id || uid()).slice(0,40), ts: tsOk ? t : parseKey(day).setHours(12), day, items,
+    title:String(e.title || "").slice(0,60), meal: MEALS.includes(e.meal) ? e.meal : null,
+    photo: typeof e.photo === "string" && e.photo.startsWith("data:image/") ? e.photo : "" };
+  if (e.note) out.note = String(e.note).slice(0,200);
+  if (e.demo) out.demo = true;
+  return out;
+}
+function cleanEntries(list){ const seen = new Set(); return (Array.isArray(list) ? list : []).map(cleanEntry).filter(e => e && !seen.has(e.id) && seen.add(e.id)); }
+function cleanDay(d){
+  if (!d || typeof d !== "object") return null;
+  const o = {};
+  if (num(d.water) > 0) o.water = Math.min(num(d.water), 20000);
+  if (num(d.weight) > 0) o.weight = r1(num(d.weight));
+  if (Array.isArray(d.activities)) o.activities = d.activities.filter(a => a && ACT_KEYS.includes(a.mode) && num(a.min) > 0).map(a => ({ id:String(a.id || uid()), mode:a.mode, min:Math.min(Math.round(num(a.min)), 1440), ts:num(a.ts) }));
+  return o;
+}
+function cleanDaily(map){ const out = {}; if (map && typeof map === "object") for (const [k,v] of Object.entries(map)){ const d = DAY_RE.test(k) && cleanDay(v); if (d) out[k] = d; } return out; }
+function cleanSettings(raw){
+  raw = raw && typeof raw === "object" ? raw : {};
+  const st = Object.assign(clone(DEFAULT_SETTINGS), raw);
+  const cal = inRange((raw.targets||{}).cal, 800, 10000, 2200);
+  const base = targetsFromSplit(cal, SPLITS[raw.split] ? raw.split : "balanced"), rt = raw.targets && typeof raw.targets === "object" ? raw.targets : {};
+  st.targets = {}; for (const k of Object.keys(base)) st.targets[k] = num(rt[k]) > 0 ? num(rt[k]) : base[k];
+  st.targets.cal = cal;
+  const P = Object.assign(clone(DEFAULT_SETTINGS.profile), raw.profile && typeof raw.profile === "object" ? raw.profile : {});
+  P.name = String(P.name || "").slice(0,40); P.sex = P.sex === "male" ? "male" : "female";
+  P.age = inRange(P.age, 12, 100, 35); P.heightIn = inRange(P.heightIn, 40, 96, 66); P.weightLb = inRange(P.weightLb, 60, 700, 160);
+  P.goalWeightLb = num(P.goalWeightLb) >= 60 ? num(P.goalWeightLb) : ""; P.restingHR = inRange(P.restingHR, 35, 120, 68);
+  if (!["1.2","1.375","1.55","1.725","1.9"].includes(String(P.activity))) P.activity = "1.55";
+  if (!["lose","slow","maintain","gain"].includes(P.goal)) P.goal = "lose";
+  st.profile = P;
+  st.split = typeof st.split === "string" ? st.split : "balanced";
+  st.waterGoal = inRange(st.waterGoal, 250, 10000, 2500);
+  st.goalDeficit = inRange(st.goalDeficit, -1500, 2000, 500);
+  const toMin = t => { const [a,b] = t.split(":").map(Number); return a*60+b; };
+  if (!TIME_RE.test(st.dayStart) || !TIME_RE.test(st.dayEnd) || toMin(st.dayEnd) - toMin(st.dayStart) < 120){ st.dayStart = "07:00"; st.dayEnd = "21:00"; }
+  st.model = typeof st.model === "string" && st.model ? st.model : DEFAULT_SETTINGS.model;
+  return st;
+}
 (function loadLocal(){
   try {
     const raw = JSON.parse(safeGet(LS_KEY) || "null");
-    if (raw){ S.entries = raw.entries||[]; S.daily = raw.daily||{}; S.settings = Object.assign(clone(DEFAULT_SETTINGS), raw.settings||{}); S.settings.targets = Object.assign(targetsFromSplit(2200,"balanced"), (raw.settings||{}).targets||{}); S.settings.profile = Object.assign(clone(DEFAULT_SETTINGS.profile), (raw.settings||{}).profile||{}); }
+    if (raw && typeof raw === "object"){ S.entries = cleanEntries(raw.entries); S.daily = cleanDaily(raw.daily); S.settings = cleanSettings(raw.settings); }
   } catch {}
-  try { const v = safeGet("snapsnack.view"); if (v) S.view = v; } catch {}
+  const v = safeGet("snapsnack.view"); if (VIEWS.includes(v)) S.view = v;
 })();
 const apiKey = { get: () => safeGet("snapsnack.apikey") || "", set: v => safeSet("snapsnack.apikey", v) };
 function saveLocal(){ safeSet(LS_KEY, JSON.stringify({ entries:S.entries, daily:S.daily, settings:S.settings })); }
@@ -467,12 +523,12 @@ function syncDiff(before, after){
     if (JSON.stringify(a) !== JSON.stringify(b)) jobs.push(a ? remote.col.doc("d_"+d).set(a) : remote.col.doc("d_"+d).delete());
   }
   if (JSON.stringify(before.settings) !== JSON.stringify(after.settings)) jobs.push(remote.col.doc("settings").set(after.settings));
-  Promise.allSettled(jobs).then(rs => { if (rs.some(r=>r.status==="rejected")) toast("Couldn't sync a change. It's saved on this device."); });
+  Promise.allSettled(jobs).then(rs => { if (rs.some(r=>r.status==="rejected") && !remote.warned){ remote.warned = true; toast("Couldn't sync a change. It's saved on this device."); } });
 }
 const undoStack = [];
 function commit(label, fn, { undoable=true } = {}){
   const before = snapshotState();
-  fn();
+  fn(); invalidate();
   const after = snapshotState();
   if (JSON.stringify(before) === JSON.stringify(after)) { render(); return false; }
   if (undoable){ undoStack.push({ label, state:before }); if (undoStack.length > 30) undoStack.shift(); }
@@ -497,29 +553,39 @@ async function initRemote(){
     const col = db.collection("data/users/" + id);
     let first = true;
     col.onSnapshot(snap => {
-      if (first){
-        first = false; remote.col = col; remote.ready = true;
-        if (snap.empty && (S.entries.length || Object.keys(S.daily).length)) { // first run in the viewer: move this device's log up
-          syncDiff({ entries:[], daily:{}, settings:{} }, snapshotState()); setAIStatus(); return;
+      try {
+        const docs = (snap && Array.isArray(snap.docs)) ? snap.docs : [];
+        const rawEntries = [], rawDaily = {}; let settings = null;
+        for (const d of docs){
+          let v = null; try { v = d.data(); } catch {}
+          if (!v || typeof v !== "object" || typeof d.id !== "string") continue;
+          if (d.id === "settings") settings = v;
+          else if (d.id.startsWith("e_")) rawEntries.push(v);
+          else if (d.id.startsWith("d_")) rawDaily[d.id.slice(2)] = v;
         }
-      }
-      if (snap.empty) return;
-      const entries = [], daily = {}; let settings = null;
-      for (const d of snap.docs){
-        const v = d.data(); if (!v) continue;
-        if (d.id === "settings") settings = v;
-        else if (d.id.startsWith("e_")) entries.push(v);
-        else if (d.id.startsWith("d_")) daily[d.id.slice(2)] = v;
-      }
-      S.entries = entries; S.daily = daily;
-      if (settings) { S.settings = Object.assign(clone(DEFAULT_SETTINGS), settings); S.settings.targets = Object.assign(targetsFromSplit(2200,"balanced"), settings.targets||{}); S.settings.profile = Object.assign(clone(DEFAULT_SETTINGS.profile), settings.profile||{}); }
-      saveLocal(); render(); setAIStatus();
+        if (first){
+          first = false; remote.col = col; remote.ready = true;
+          if (!docs.length){ // first run on this account: move this device's log up
+            if (S.entries.length || Object.keys(S.daily).length) syncDiff({ entries:[], daily:{}, settings:{} }, snapshotState());
+            setAIStatus(); return;
+          }
+          const have = new Set(rawEntries.map(e => String(e.id)));
+          const localOnly = S.entries.filter(e => !have.has(e.id)); // logged here before signing in: keep, upload
+          for (const e of localOnly){ rawEntries.push(e); col.doc("e_" + e.id).set(e).catch(()=>{}); }
+          if (!settings && S.settings) col.doc("settings").set(S.settings).catch(()=>{});
+        }
+        if (!docs.length) return;
+        S.entries = cleanEntries(rawEntries); S.daily = cleanDaily(rawDaily);
+        if (settings) S.settings = cleanSettings(settings);
+        saveLocal(); render(); setAIStatus();
+      } catch (err){ console.error(err); }
     }, () => { toast("Sync is unavailable. Your log stays on this device."); });
   } catch {}
 }
 
 /* ---------- AI ---------- */
 const AI = { mode:"none", sample:null }; // "claude" (viewer), "api" (own key), "none"
+const IN_VIEWER = !!(window.claude && typeof window.claude.use === "function"); // opened from a claude.ai link (no outside network: API keys can't work here)
 async function initAI(){
   if (window.claude && typeof window.claude.use === "function"){
     try {
@@ -532,13 +598,13 @@ async function initAI(){
       }
     } catch {}
   }
-  if (AI.mode === "none" && apiKey.get()) AI.mode = "api";
+  if (AI.mode === "none" && apiKey.get() && !IN_VIEWER) AI.mode = "api";
   setAIStatus();
 }
 function setAIStatus(){
   const dot = $("#aidot"), t = $("#aitext");
   dot.className = "dot " + (AI.mode === "none" ? "off" : "on");
-  t.textContent = AI.mode === "claude" ? (remote.ready ? "Claude · synced" : "Claude AI on")
+  t.textContent = AI.mode === "claude" ? (!AI.vision ? "Claude · no photo reading" : remote.ready ? "Claude · synced" : "Claude AI on")
                : AI.mode === "api" ? "Claude API key" : "Manual mode";
 }
 async function apiCall(content, maxTokens=1500){
@@ -571,7 +637,7 @@ function aiErrorText(e){
   if (c === "not_granted") return "Claude access was declined, so photos need manual entry. Reload to be asked again.";
   if (c === "rate_limited") return "Claude is busy. Wait a minute and try again.";
   if (c === "images_unavailable") return "This view can't send photos to Claude. Add the items by hand or by voice.";
-  if (c === "no_ai") return "No AI connected. Add a Claude API key in Targets, or add items by hand.";
+  if (c === "no_ai") return IN_VIEWER ? "Photo reading needs you signed in to Claude. Add the items by hand for now." : "No AI connected. Add a Claude API key in Targets, or add items by hand.";
   return (e && e.message) || "The analysis failed. Add the items by hand or try another photo.";
 }
 
@@ -629,7 +695,12 @@ function mealFor(ts, cal){
   return base;
 }
 function sumItems(items){ const t = {}; for (const k of NUTR) t[k] = 0; for (const it of items||[]) for (const k of NUTR) t[k] += num(it[k]); return t; }
-function entriesOn(k){ return S.entries.filter(e=>e.day===k).sort((a,b)=>a.ts-b.ts); }
+let _byDay = null; // rebuilt lazily; cleared on every change and render
+function invalidate(){ _byDay = null; }
+function entriesOn(k){
+  if (!_byDay){ _byDay = new Map(); for (const e of S.entries){ if (!_byDay.has(e.day)) _byDay.set(e.day, []); _byDay.get(e.day).push(e); } for (const a of _byDay.values()) a.sort((x,y)=>x.ts-y.ts); }
+  return (_byDay.get(k) || []).slice();
+}
 function dayTotals(k){ return sumItems(entriesOn(k).flatMap(e=>e.items)); }
 function logged(k){ return entriesOn(k).length > 0; }
 function streak(){
@@ -640,7 +711,7 @@ function streak(){
 function paceFraction(now = new Date()){
   const [sh,sm] = S.settings.dayStart.split(":").map(Number), [eh,em] = S.settings.dayEnd.split(":").map(Number);
   const m = now.getHours()*60+now.getMinutes(), a = sh*60+sm, b = eh*60+em;
-  return Math.min(1, Math.max(0, (m-a)/(b-a)));
+  return b > a ? Math.min(1, Math.max(0, (m-a)/(b-a))) : 0.5;
 }
 function status(val, target, kind="cal"){
   if (!target) return "";
@@ -747,7 +818,7 @@ function itemScore(it){
   return Math.round(Math.max(0, Math.min(100, sc)));
 }
 function scoreItems(items){ const tot = items.reduce((a,i)=>a+Math.max(num(i.cal),1),0); return items.length ? Math.round(items.reduce((a,i)=>a+itemScore(i)*Math.max(num(i.cal),1),0)/tot) : null; }
-const grade = sc => (GRADES.find(g=>sc>=g[0])||GRADES.at(-1))[1];
+const grade = sc => sc == null ? "–" : (GRADES.find(g=>sc>=g[0]) || GRADES[GRADES.length-1])[1];
 const gradeTone = sc => sc >= 87 ? "good" : sc >= 73 ? "mid" : sc >= 60 ? "warn" : "bad";
 function gradeBadge(sc, big){ return sc == null ? null : h("span",{ class:`gr ${gradeTone(sc)}${big?" big":""}`, title:`Score ${sc}%` }, grade(sc), h("small",null, sc + "%")); }
 function dayScore(k){
@@ -845,11 +916,12 @@ async function analyzePhoto(file){
 
 /* ---------- charts ---------- */
 const charts = [];
+let quietRender = false; // timed refreshes redraw without animating
 function killCharts(){ while (charts.length) charts.pop().destroy(); }
 function chartBase(){
   const ink = cssv("--muted"), line = cssv("--line");
   return {
-    responsive:true, maintainAspectRatio:false, animation:{ duration: matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : 400 },
+    responsive:true, maintainAspectRatio:false, animation:{ duration: (quietRender || matchMedia("(prefers-reduced-motion: reduce)").matches) ? 0 : 400 },
     interaction:{ mode:"index", intersect:false },
     plugins:{ legend:{ labels:{ color:ink, boxWidth:10, boxHeight:10, font:{ family:"Figtree", size:12 } } },
               tooltip:{ backgroundColor:cssv("--ink"), titleColor:cssv("--bg"), bodyColor:cssv("--bg"), padding:10 } },
@@ -857,7 +929,11 @@ function chartBase(){
              y:{ ticks:{ color:ink, font:{ family:"JetBrains Mono", size:10 } }, grid:{ color:line }, border:{ display:false }, beginAtZero:true } },
   };
 }
-function mkChart(canvas, cfg){ if (!window.Chart) { canvas.replaceWith(h("p",{class:"note"},"Charts need the network to load. Your numbers are below.")); return; } charts.push(new Chart(canvas, cfg)); }
+function mkChart(canvas, cfg){
+  if (!canvas) return;
+  if (!window.Chart) { canvas.replaceWith(h("p",{class:"note"},"Charts need the network to load. Your numbers are below.")); return; }
+  try { charts.push(new Chart(canvas, cfg)); } catch (err){ console.error(err); canvas.replaceWith(h("p",{class:"note"},"This chart couldn't draw. Your numbers are elsewhere on this page.")); }
+}
 function alpha(c, a){ // canvas can't parse color-mix(), so convert #hex tokens to rgba()
   const m = /^#?([0-9a-f]{6})$/i.exec(String(c).trim());
   if (!m) return c;
@@ -865,12 +941,27 @@ function alpha(c, a){ // canvas can't parse color-mix(), so convert #hex tokens 
 }
 
 /* ---------- render ---------- */
-function setView(v){ S.view = v; safeSet("snapsnack.view", v); render(); window.scrollTo({ top:0 }); }
+function setView(v){ S.view = VIEWS.includes(v) ? v : "today"; safeSet("snapsnack.view", S.view); render(); window.scrollTo({ top:0 }); }
 function render(){
+  invalidate();
+  if (!VIEWS.includes(S.view)) S.view = "today";
   for (const b of document.querySelectorAll(".tabs button")) b.setAttribute("aria-selected", b.dataset.view === S.view);
-  killCharts();
+  try { killCharts(); } catch {}
   const main = $("#main"); main.replaceChildren();
-  ({ today:renderToday, gallery:renderGallery, burn:renderBurn, progress:renderProgress, week:renderWeek, month:renderMonth, targets:renderTargets }[S.view] || renderToday)(main);
+  try {
+    ({ today:renderToday, gallery:renderGallery, burn:renderBurn, progress:renderProgress, week:renderWeek, month:renderMonth, targets:renderTargets }[S.view])(main);
+  } catch (err){ console.error(err); showFatal(err); }
+}
+function showFatal(err){
+  const main = $("#main"); if (!main) return;
+  main.replaceChildren(h("section",{ class:"card empty", style:"margin-top:16px" },
+    h("h3",null,"This screen couldn't load"),
+    h("p",null,"Your meals are safe. Try another tab or reload. If it keeps happening, reset this device's copy. Meals synced to your Claude account come back after a reset."),
+    h("div",{ class:"rowbtns", style:"justify-content:center" },
+      h("button",{ class:"chipbtn primary", onclick:()=>{ S.view = "today"; render(); } }, "Go to Today"),
+      h("button",{ class:"chipbtn", onclick:()=>location.reload() }, "Reload"),
+      h("button",{ class:"chipbtn danger", onclick:()=>{ try { localStorage.removeItem(LS_KEY); localStorage.removeItem("snapsnack.view"); } catch {} location.reload(); } }, "Reset this device")),
+    h("p",{ class:"note mono", style:"font-size:11px;word-break:break-word" }, "Details: " + String((err && (err.message || err)) || "unknown").slice(0,160))));
 }
 
 function ringSVG(pct, color, size=96){
@@ -927,7 +1018,7 @@ function renderToday(main){
   const chips = h("div",{ class:"macrochips" }, MACROS.map((m,i)=> h("div",{ class:"mchip" },
     h("div",{ class:"l" }, h("span",{ class:"sw", style:`background:var(${m.color})` }), m.label),
     h("div",{ class:"n num" }, r0(kc[i]/kt*100) + "%"),
-    h("div",{ class:"t" }, `of calories · goal ${r0((SPLITS[S.settings.split]||{p:0,c:0,f:0})[m.key[0]==="p"?"p":m.key[0]==="c"?"c":"f"]*100)}%`))));
+    h("div",{ class:"t" }, `of calories · goal ${r0(T[m.key]*m.kcal/Math.max(T.cal,1)*100)}%`))));
 
   // water
   const W = (S.daily[k]||{}).water||0, glasses = Math.ceil(S.settings.waterGoal/250);
@@ -1084,7 +1175,7 @@ function renderMonth(main){
     stat("Avg calories", fmt(P.avg("cal")), `target ${fmt(T.cal)}`),
     stat("On target", `${P.lg.length ? r0(P.onTarget/P.lg.length*100) : 0}%`, "of logged days"),
     stat("Trend", P.slopeCal > 15 ? "↗" : P.slopeCal < -15 ? "↘" : "→", trendWord(P.slopeCal)),
-    wPts.length >= 2 ? stat("Weight change", (wPts.at(-1)-wPts[0] > 0 ? "+" : "") + r1(wPts.at(-1)-wPts[0]) + " lb", `${wPts[0]} → ${wPts.at(-1)} lb`) : stat("Weight", wPts.length ? wPts.at(-1) + " lb" : "–", "say “my weight is 172”"));
+    wPts.length >= 2 ? stat("Weight change", (last(wPts)-wPts[0] > 0 ? "+" : "") + r1(last(wPts)-wPts[0]) + " lb", `${wPts[0]} → ${last(wPts)} lb`) : stat("Weight", wPts.length ? last(wPts) + " lb" : "–", "say “my weight is 172”"));
   const avgMac = h("section",{ class:"card" }, h("div",{ class:"cardhead" }, h("h2",null,"Average day"), h("span",{ class:"sub" }, "Logged days only")),
     h("div",{ class:"label", style:"border-width:1.5px" }, [...MACROS, ...LIMITS].map(m => { const v = P.avg(m.key); return h("div",{ class:"row" }, h("span",null,m.label), h("span",{ class:"num" }, `${fmt(v)} / ${fmt(T[m.key])} ${m.unit}`), h("span",{ class:"dv num" }, T[m.key] ? r0(v/T[m.key]*100) + "%" : "–"), bar(v, T[m.key], m.color || (m.kind==="min" ? "--fiber" : "--muted"), m.kind)); })));
   const c1 = h("section",{ class:"card" }, h("div",{ class:"cardhead" }, h("h2",null,"Calories, 30 days"), h("span",{ class:"sub" }, "Daily, 7-day average and target")), h("div",{ class:"chartbox tall" }, h("canvas",{ id:"cv-mo" })));
@@ -1158,6 +1249,7 @@ function renderTargets(main){
 
   const ai = h("section",{ class:"card" }, h("div",{ class:"cardhead" }, h("h2",null,"Photo AI"), h("span",{ class:"sub" }, AI.mode === "claude" ? "Connected through Claude" : AI.mode === "api" ? "Using your API key" : "Not connected")));
   if (AI.mode === "claude") ai.append(h("p",{ class:"note" }, "Photos go to Claude on your account for itemizing. Your log is saved privately to your account and stays in sync on every device where you open this page."));
+  else if (IN_VIEWER) ai.append(h("p",{ class:"note" }, "Photo reading turns on when you open this link signed in to Claude. If you are signed in and still see Manual mode, your Claude plan may not include it. Your log still works: add foods by typing or with Add by hand."));
   else ai.append(
     h("p",{ class:"note" }, "Running outside Claude. Paste an Anthropic API key to turn photos into itemized nutrition. The key is kept only in this browser."),
     h("div",{ class:"form" },
@@ -1279,7 +1371,7 @@ function renderGallery(main){
 }
 function tile(e){
   const t = sumItems(e.items), sc = scoreItems(e.items), T = S.settings.targets;
-  return h("button",{ class:"tile", onclick:()=>openCaption(e), "aria-label":`${e.title||"Meal"}, ${fmt(t.cal)} kcal, grade ${grade(sc)}. Open nutrition caption` },
+  return h("button",{ class:"tile", onclick:()=>openCaption(e), "aria-label":`${e.title||"Meal"}, ${fmt(t.cal)} kcal${sc == null ? "" : ", grade " + grade(sc)}. Open nutrition caption` },
     e.photo ? h("img",{ src:e.photo, alt:"" }) : h("div",{ class:"ph" }, e.title || "Meal"),
     h("span",{ class:"tg" }, gradeBadge(sc)),
     h("span",{ class:"cap" }, h("b",null, `${fmt(t.cal)} kcal`), h("span",null, `${timeStr(e.ts)} · ${r0(t.cal/T.cal*100)}% of day`)));
@@ -1392,7 +1484,7 @@ function spark(vals, colorVar, target){
   const x = i => 2 + i/(vals.length-1)*(W-4), y = v => H-3 - (v-lo)/(hi-lo)*(H-6);
   if (target != null) svg.append(s("line",{ x1:0, x2:W, y1:y(target), y2:y(target), stroke:"var(--muted)", "stroke-dasharray":"3 3", "stroke-width":1, "vector-effect":"non-scaling-stroke" }));
   const d = pts.map((p,i)=>(i ? "L" : "M") + x(p[0]).toFixed(1) + "," + y(p[1]).toFixed(1)).join("");
-  svg.append(s("path",{ d: d + `L${x(pts.at(-1)[0]).toFixed(1)},${H}L${x(pts[0][0]).toFixed(1)},${H}Z`, fill:`var(${colorVar})`, opacity:.14 }));
+  svg.append(s("path",{ d: d + `L${x(last(pts)[0]).toFixed(1)},${H}L${x(pts[0][0]).toFixed(1)},${H}Z`, fill:`var(${colorVar})`, opacity:.14 }));
   svg.append(s("path",{ d, fill:"none", stroke:`var(${colorVar})`, "stroke-width":2, "vector-effect":"non-scaling-stroke", "stroke-linejoin":"round" }));
   return svg;
 }
@@ -1658,7 +1750,7 @@ function localCommand(text){
   }
   if ((m = t.match(/\bdeficit\b\D*(\d+)/))) { commit(`Deficit goal set to ${fmt(num(m[1]))} kcal`, ()=>{ S.settings.goalDeficit = num(m[1]); }); return true; }
   if ((m = t.match(/\b(?:weigh|weight)\b\D*(\d+(?:\.\d+)?)\s*(kg|kilos?|lb|lbs|pounds)?/))) { logWeight(num(m[1]), m[2]); return true; }
-  if (/(delete|remove)\s+(the\s+)?last( meal| entry)?/.test(t)) { const es = entriesOn(S.day); const last = es.at(-1); if (!last) { toast("No meals to remove on this day."); return true; } commit(`Deleted ${last.title||"meal"}`, ()=>{ S.entries = S.entries.filter(x=>x!==last); }); return true; }
+  if (/(delete|remove)\s+(the\s+)?last( meal| entry)?/.test(t)) { const es = entriesOn(S.day); const lastE = last(es); if (!lastE) { toast("No meals to remove on this day."); return true; } commit(`Deleted ${lastE.title||"meal"}`, ()=>{ S.entries = S.entries.filter(x=>x.id!==lastE.id); }); return true; }
   if ((m = t.match(/^(?:i\s+)?(?:add|ate|had|log|drank)\s+(.+)/))) {
     const words = { a:1, an:1, one:1, two:2, three:3, four:4, half:.5 };
     const parts = m[1].split(/\s*(?:,|\band\b|\bwith\b|&)\s*/).filter(Boolean), items = [];
@@ -1750,10 +1842,18 @@ matchMedia("(prefers-color-scheme: dark)").addEventListener?.("change", () => re
 new MutationObserver(() => render()).observe(document.documentElement, { attributes:true, attributeFilter:["data-theme"] });
 // real-time: roll the clock, pace line and day boundary every minute
 let lastDay = todayKey();
-setInterval(() => { const k = todayKey(); if (k !== lastDay){ if (S.day === lastDay) S.day = k; lastDay = k; } if (["today","burn","progress"].includes(S.view) && $("#scrim").hidden && document.activeElement?.tagName !== "INPUT") render(); }, 60000);
+setInterval(() => {
+  const k = todayKey(); if (k !== lastDay){ if (S.day === lastDay) S.day = k; lastDay = k; }
+  const busy = ["INPUT","SELECT","TEXTAREA"].includes(document.activeElement && document.activeElement.tagName);
+  if (document.hidden || busy || !$("#scrim").hidden || !["today","burn","progress"].includes(S.view)) return;
+  const y = window.scrollY; quietRender = true; render(); quietRender = false; window.scrollTo(0, y);
+}, 60000);
 
 render();
-initAI(); initVoice(); initRemote();
+Promise.resolve().then(initAI).catch(e=>{ console.error(e); setAIStatus(); });
+Promise.resolve().then(initVoice).catch(e=>console.error(e));
+Promise.resolve().then(initRemote).catch(e=>console.error(e));
+setTimeout(() => { if (!$("#main").children.length) showFatal(new Error("The app did not finish starting.")); }, 4000);
 })();
 </script>
 <!--ARTIFACT-END-->
