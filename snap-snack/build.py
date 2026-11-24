@@ -17,6 +17,14 @@ share = share.replace("</head>", f'''<meta name="apple-mobile-web-app-capable" c
 <link rel="icon" href="{icon}">
 </head>''', 1).replace("<!--ARTIFACT-START-->\n", "").replace("<!--ARTIFACT-END-->\n", "")
 open("snap-snack-share.html", "w").write(share)
+# Installable web app for hosting on a domain (site/): manifest, icons, offline service worker, install prompt.
+site = share.replace('<link rel="icon" href="' + icon + '">', """<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
+<link rel="icon" type="image/svg+xml" href="icons/icon.svg">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">""", 1)
+site = site.replace("</body>", open("install.inc.html").read() + "</body>", 1)
+os.makedirs("site", exist_ok=True)
+open("site/index.html", "w").write(site)
 if len(sys.argv) > 2:
     a = src.index("<!--ARTIFACT-START-->\n") + len("<!--ARTIFACT-START-->\n")
     open(os.path.join(sys.argv[2], "snap-snack.html"), "w").write(src[a:src.index("<!--ARTIFACT-END-->")])
