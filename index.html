@@ -21,7 +21,7 @@
 <script>
   // Opened from the home-screen icon? Go straight into the app.
   (function(){
-    var app="https://claude.ai/artifact/QYsn9H9JtPMVYBz6EfCSJ1";
+    var app="/app/";
     var standalone = (window.matchMedia && matchMedia("(display-mode: standalone)").matches) || navigator.standalone === true;
     if (standalone || /[?&]launch=1/.test(location.search)) location.replace(app);
   })();
@@ -103,8 +103,8 @@ ul{margin:0;padding-left:20px;line-height:1.6;color:#d5d9f5}
 
   <h1>Snap Snack</h1>
   <p class="tag">Snap a pic. We sort the rest.</p>
-  <a class="btn primary" href="https://claude.ai/artifact/QYsn9H9JtPMVYBz6EfCSJ1">Open Snap Snack</a>
-  <p class="small">Free for every member. Sign in to Claude for AI photo reading. Your log stays private to you.</p>
+  <a class="btn primary" href="/app/">Open Snap Snack</a>
+  <p class="small">Free for every member. No account or download needed: your first 7 days include unlimited AI photo reading. Your log stays private to you.</p>
 
   <div class="card" id="install">
     <h2>Put Snap Snack on your home screen</h2>
