@@ -17,11 +17,16 @@ share = share.replace("</head>", f'''<meta name="apple-mobile-web-app-capable" c
 <link rel="icon" href="{icon}">
 </head>''', 1).replace("<!--ARTIFACT-START-->\n", "").replace("<!--ARTIFACT-END-->\n", "")
 open("snap-snack-share.html", "w").write(share)
+# Snap Snack's Supabase project. The publishable key is meant to ship in apps: the database's per-user rules
+# decide what it can reach. Only the hosted site gets it, so it reads photos through Snap Snack's own server.
+SERVER_URL = "https://sfsedszatxizmyyvezcp.supabase.co"
+SERVER_KEY = "sb_publishable_ObSsn5r9buLuqq5eHVznuA_Zyne3O2q"
 # Installable web app for hosting on a domain (site/): manifest, icons, offline service worker, install prompt.
 site = share.replace('<link rel="icon" href="' + icon + '">', """<link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
 <link rel="icon" type="image/svg+xml" href="icons/icon.svg">
-<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">""", 1)
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<script>window.SNAP_SERVER = {url: "%s", key: "%s"};</script>""" % (SERVER_URL, SERVER_KEY), 1)
 site = site.replace("</body>", open("install.inc.html").read() + "</body>", 1)
 os.makedirs("site", exist_ok=True)
 open("site/index.html", "w").write(site)

@@ -586,7 +586,42 @@ async function initRemote(){
 }
 
 /* ---------- AI ---------- */
-const AI = { mode:"none", sample:null }; // "claude" (viewer), "api" (own key), "none"
+const AI = { mode:"none", sample:null }; // "claude" (viewer), "server" (Snap Snack's own server), "api" (own key), "none"
+const SERVER = window.SNAP_SERVER || null; // { url, key } — set only in the hosted website build
+const textAI = () => AI.mode === "claude" || AI.mode === "api"; // free-form commands and estimates need one of these
+
+/* Snap Snack server: a guest account is created on first open (7-day trial starts), kept in this browser. */
+const SESS_KEY = "snapsnack.session";
+const sess = { get(){ try { return JSON.parse(safeGet(SESS_KEY) || "null"); } catch { return null; } }, set(v){ safeSet(SESS_KEY, JSON.stringify(v)); } };
+async function authCall(path, body){
+  const r = await fetch(SERVER.url + "/auth/v1/" + path, { method:"POST", headers:{ apikey:SERVER.key, "content-type":"application/json" }, body:JSON.stringify(body) });
+  const j = await r.json().catch(()=>({}));
+  if (!r.ok || !j.access_token) throw { code:"auth", message:"Couldn't start your free trial. Check your connection and try again." };
+  return { access_token:j.access_token, refresh_token:j.refresh_token, expires_at: Date.now() + (j.expires_in || 3600) * 1000 };
+}
+async function serverToken(){
+  let s = sess.get();
+  if (s && s.expires_at - Date.now() > 60000) return s.access_token;
+  if (s && s.refresh_token){ try { s = await authCall("token?grant_type=refresh_token", { refresh_token:s.refresh_token }); sess.set(s); return s.access_token; } catch {} }
+  s = await authCall("signup", { data:{} }); sess.set(s); return s.access_token; // anonymous guest account
+}
+async function serverProfile(){
+  const t = await serverToken();
+  const r = await fetch(SERVER.url + "/rest/v1/profiles?select=trial_ends_at,sub_status,plan,current_period_end", { headers:{ apikey:SERVER.key, Authorization:"Bearer " + t } });
+  const rows = r.ok ? await r.json() : [];
+  AI.profile = rows[0] || null;
+}
+async function serverPhoto(image){
+  const small = await resizeImage(image, 1280, 0.85);
+  const body = JSON.stringify({ image_base64: await blobToBase64(small), media_type:"image/jpeg" });
+  const call = async () => fetch(SERVER.url + "/functions/v1/ai", { method:"POST", headers:{ apikey:SERVER.key, Authorization:"Bearer " + await serverToken(), "content-type":"application/json" }, body });
+  let r;
+  try { r = await call(); } catch { throw { code:"offline", message:"No connection. Your photo wasn't read; add the items by hand or try again when you're online." }; }
+  if (r.status === 401){ sess.set(null); r = await call(); } // session lost: start a fresh guest session once
+  const j = await r.json().catch(()=>({}));
+  if (!r.ok) throw { code: j.error || "server", message: j.message || "Photo reading failed. Try again." };
+  return j;
+}
 const IN_VIEWER = !!(window.claude && typeof window.claude.use === "function"); // opened from a claude.ai link (no outside network: API keys can't work here)
 async function initAI(){
   if (window.claude && typeof window.claude.use === "function"){
@@ -600,13 +635,25 @@ async function initAI(){
       }
     } catch {}
   }
+  if (AI.mode === "none" && SERVER && !IN_VIEWER){
+    AI.mode = "server"; AI.vision = true; setAIStatus();
+    try { await serverProfile(); } catch {}
+  }
   if (AI.mode === "none" && apiKey.get() && !IN_VIEWER) AI.mode = "api";
   setAIStatus();
+}
+function trialDaysLeft(){ const p = AI.profile; return p ? Math.ceil((Date.parse(p.trial_ends_at) - Date.now()) / 864e5) : null; }
+function serverStatus(){
+  const p = AI.profile; if (!p) return "Photo reading on";
+  if (p.sub_status === "active") return "Subscribed";
+  const d = trialDaysLeft();
+  return d > 0 ? `Free trial · ${d} day${d === 1 ? "" : "s"} left` : "Free trial ended";
 }
 function setAIStatus(){
   const dot = $("#aidot"), t = $("#aitext");
   dot.className = "dot " + (AI.mode === "none" ? "off" : "on");
   t.textContent = AI.mode === "claude" ? (!AI.vision ? "Claude · no photo reading" : remote.ready ? "Claude · synced" : "Claude AI on")
+               : AI.mode === "server" ? serverStatus()
                : AI.mode === "api" ? "Claude API key" : "Manual mode";
 }
 async function apiCall(content, maxTokens=1500){
@@ -625,6 +672,10 @@ async function aiJSON(prompt, { image=null, quick=false } = {}){
     const opts = { modelTier: quick ? "quick" : "default", cache:false };
     if (image) opts.images = [image];
     return await AI.sample.json(prompt, opts);
+  }
+  if (AI.mode === "server"){
+    if (image) return await serverPhoto(image);
+    throw { code:"no_ai", message:"No AI connected." };
   }
   if (AI.mode === "api"){
     const content = [];
@@ -1249,8 +1300,9 @@ function renderTargets(main){
       pf("d-s","First meal around", h("input",{ id:"d-s", type:"time", value:st.dayStart, onchange:e=>commit("Eating window updated", ()=>{ S.settings.dayStart = e.target.value || "07:00"; }) })),
       pf("d-e","Last meal around", h("input",{ id:"d-e", type:"time", value:st.dayEnd, onchange:e=>commit("Eating window updated", ()=>{ S.settings.dayEnd = e.target.value || "21:00"; }) }))));
 
-  const ai = h("section",{ class:"card" }, h("div",{ class:"cardhead" }, h("h2",null,"Photo AI"), h("span",{ class:"sub" }, AI.mode === "claude" ? "Connected through Claude" : AI.mode === "api" ? "Using your API key" : "Not connected")));
+  const ai = h("section",{ class:"card" }, h("div",{ class:"cardhead" }, h("h2",null,"Photo AI"), h("span",{ class:"sub" }, AI.mode === "claude" ? "Connected through Claude" : AI.mode === "server" ? serverStatus() : AI.mode === "api" ? "Using your API key" : "Not connected")));
   if (AI.mode === "claude") ai.append(h("p",{ class:"note" }, "Photos go to Claude on your account for itemizing. Your log is saved privately to your account and stays in sync on every device where you open this page."));
+  else if (AI.mode === "server") ai.append(h("p",{ class:"note" }, "Photo reading is included. Your first 7 days are free and unlimited, with no sign-up. Your meal log is saved on this phone; use Export backup below to keep a copy."));
   else if (IN_VIEWER) ai.append(h("p",{ class:"note" }, "Photo reading turns on when you open this link signed in to Claude. If you are signed in and still see Manual mode, your Claude plan may not include it. Your log still works: add foods by typing or with Add by hand."));
   else ai.append(
     h("p",{ class:"note" }, "Running outside Claude. Paste an Anthropic API key to turn photos into itemized nutrition. The key is kept only in this browser."),
@@ -1273,7 +1325,7 @@ function renderTargets(main){
       "“Show the gallery”  /  “open progress”",
       "“Show the week”  /  “undo”",
     ].map(t=>h("li",null,t))),
-    h("p",{ class:"note" }, AI.mode === "none" ? "Without AI, simple commands work (targets, water, weight, undo, views, adding common foods). Connect AI for free-form edits." : "Claude reads free-form commands and makes the change. Every change can be undone."));
+    h("p",{ class:"note" }, !textAI() ? "Simple commands work (targets, water, weight, undo, views, adding common foods). Connect AI for free-form edits." : "Claude reads free-form commands and makes the change. Every change can be undone."));
 
   const data = h("section",{ class:"card" }, h("div",{ class:"cardhead" }, h("h2",null,"Your data"), h("span",{ class:"sub" }, `${S.entries.length} meals logged`)),
     h("div",{ class:"rowbtns" },
@@ -1587,7 +1639,7 @@ function openEditor(entry, isNew=false){
   const addFromQ = async () => {
     const v = q.value.trim(); if (!v) { e.items.push(normItem({ name:"New item" })); drawItems(); return; }
     let f = findFood(v);
-    if (!f && AI.mode !== "none"){
+    if (!f && textAI()){
       q.disabled = true; q.value = "Estimating…";
       try { const r = await aiJSON(`Estimate nutrition for: "${v}". Reply with only JSON {"items":[{"name":"","portion":"","cal":0,"protein":0,"carbs":0,"fat":0,"sat_fat":0,"fiber":0,"sugar":0,"sodium":0}]} — one object per distinct food. Grams for macros, mg for sodium.`, { quick:true });
         (r.items||[]).forEach(it=>e.items.push(normItem(it))); } catch (err){ toast(aiErrorText(err)); }
@@ -1768,8 +1820,8 @@ function localCommand(text){
 async function runCommand(text){
   text = text.trim(); if (!text) return;
   const heard = $("#heard"); heard.hidden = false; heard.textContent = `“${text}”`;
-  if (AI.mode === "none"){
-    if (!localCommand(text)) toast("I didn't catch a command. Try “set protein to 150” or “add a banana”. Connect AI in Targets for free-form edits.");
+  if (!textAI()){
+    if (!localCommand(text)) toast(AI.mode === "server" ? "I didn't catch that. Try “set protein to 150”, “add a banana” or “I walked 20 minutes”." : "I didn't catch a command. Try “set protein to 150” or “add a banana”. Connect AI in Targets for free-form edits.");
     setTimeout(()=>{ heard.hidden = true; }, 4000); return;
   }
   // quick deterministic commands skip the round-trip
